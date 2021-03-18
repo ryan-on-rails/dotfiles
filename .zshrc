@@ -15,7 +15,14 @@ if command -v brew >/dev/null 2>&1; then
   [ -f $(brew --prefix)/etc/profile.d/z.sh ] && source $(brew --prefix)/etc/profile.d/z.sh
 fi
 
-. $(brew --prefix asdf)/asdf.sh
+# Get operating system
+platform='unknown'
+unamestr=$(uname)
+if [[ $unamestr == 'Linux' ]]; then
+  platform='linux'
+elif [[ $unamestr == 'Darwin' ]]; then
+  platform='darwin'
+fi
 
 # =============================================================================
 #                                   Functions
@@ -53,17 +60,17 @@ fif() {
 
 # fkill - kill processes - list only the ones you can kill. Modified the earlier script.
 fkill() {
-    local pid 
+    local pid
     if [ "$UID" != "0" ]; then
         pid=$(ps -f -u $UID | sed 1d | fzf -m | awk '{print $2}')
     else
         pid=$(ps -ef | sed 1d | fzf -m | awk '{print $2}')
-    fi  
+    fi
 
     if [ "x$pid" != "x" ]
     then
         echo $pid | xargs kill -${1:-9}
-    fi  
+    fi
 }
 
 # Modified version where you can press
@@ -76,6 +83,12 @@ fo() (
   if [ -n "$file" ]; then
     [ "$key" = ctrl-o ] && open "$file" || ${EDITOR:-vim} "$file"
   fi
+)
+
+fgb() (
+  local branch
+  branch=$(git branch | fzf -m | awk '{print $1}')
+  git switch $branch
 )
 
 # =============================================================================
@@ -148,6 +161,9 @@ zplug "plugins/httpie",               from:oh-my-zsh, if:"which httpie"
 zplug "plugins/nanoc",                from:oh-my-zsh, if:"which nanoc"
 zplug "plugins/nmap",                 from:oh-my-zsh, if:"which nmap"
 zplug "rupa/z"
+zplug "clvv/fasd"
+zplug "desyncr/auto-ls"
+zplug "MichaelAquilina/zsh-you-should-use"
 zplug "seebi/dircolors-solarized", ignore:"*", as:plugin
 zplug "zsh-users/zsh-completions",              defer:0
 zplug "zsh-users/zsh-autosuggestions",          defer:2, on:"zsh-users/zsh-completions"
@@ -169,14 +185,11 @@ fi
 zplug load
 source $ZSH/oh-my-zsh.sh
 
-autoload -U promptinit; promptinit
-prompt pure
-
 # Preferred editor for local and remote sessions
 if [[ -n $SSH_CONNECTION ]]; then
   export EDITOR='vim'
 else
-  export EDITOR='vim'
+  export EDITOR='subl --wait'
 fi
 
 # ssh
@@ -187,16 +200,54 @@ export SSH_KEY_PATH="~/.ssh/rsa_id"
 # users are encouraged to define aliases within the ZSH_CUSTOM folder.
 # For a full list of active aliases, run `alias`.
 #
+# Homebrew
+alias brewu='brew update && brew upgrade && brew cleanup && brew doctor'
 alias bup="brew upgrade && brew update"
-alias zshconfig="vim ~/.zshrc"
-alias envconfig="vim ~/Documents/code/env.sh"
-alias ohmyzsh="vim ~/.oh-my-zsh"
-alias bashconfig="vim ~/.bash_profile"
+
+# Common shell functions
+alias less='less -r'
+alias tf='tail -f'
+alias l='less'
+alias lh='ls -alt | head' # see the last modified files
+alias screen='TERM=screen screen'
+alias cl='clear'
+alias cls='clear;ls'
+alias ve="$EDITOR ~/.vimrc"
+alias ze="$EDITOR ~/.zshrc"
+alias rz='source ~/.zshrc'
+alias envconfig="$EDITOR ~/Documents/code/env.sh"
+alias ohmyzsh="$EDITOR ~/.oh-my-zsh"
+alias bashconfig="$EDITOR ~/.bash_profile"
 alias desk="cd ~/Desktop"
-alias host="vim /etc/hosts"
+alias host="$EDITOR /etc/hosts"
 alias fuck='$(thefuck $(fc -ln -1))'
 alias speed="speedtest-cli"
-alias vimrc="vim ~/.vimrc"
+
+# PS
+alias psa="ps aux"
+alias psrg="ps aux | rg "
+
+# Show human friendly numbers and colors
+alias df='df -h'
+alias du='du -h -d 2'
+
+if [[ $platform == 'linux' ]]; then
+  alias ll='ls -alh --color=auto'
+  alias ls='ls --color=auto'
+elif [[ $platform == 'darwin' ]]; then
+  alias ll='ls -alGh'
+  alias ls='ls -Gh'
+fi
+
+# FASD
+alias a='fasd -a'        # any
+alias s='fasd -si'       # show / search / select
+alias d='fasd -d'        # directory
+alias sd='fasd -sid'     # interactive directory selection
+alias sf='fasd -sif'     # intecomesractive file selection
+alias z='fasd_cd -d'     # cd, same functionality as j in autojump
+alias zz='fasd_cd -d -i' # cd with interactive selection
+
 # docker
 alias de='docker exec -e COLUMNS="$(tput cols)" -e LINES="$(tput lines)" -ti'
 alias dps='docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Command}}\t{{.Image}}"'
@@ -211,7 +262,7 @@ alias dprune='docker system prune'
 alias showFiles='defaults write com.apple.finder AppleShowAllFiles YES; killall Finder /System/Library/CoreServices/Finder.app'
 alias hideFiles='defaults write com.apple.finder AppleShowAllFiles NO; killall Finder /System/Library/CoreServices/Finder.app'
 
-alias cmmlocal='vim ~/dev/local_override.yml'
+alias cmmlocal="$EDITOR ~/dev/local_override.yml"
 
 # Kill all running containers.
 alias dockerkillall='docker kill $(docker ps -q)'
@@ -244,6 +295,33 @@ shovel() ( cd ~/dev && ./script/run shovel "$@"; )
 export PLATFORM_DEV=$HOME/dev # change to match your local dev directory
 fpath=($PLATFORM_DEV/misc/completion/ $fpath)
 
+gradingstart() {
+  NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  echo "starting grading at $(date +"%F %r")"
+  CURRENT_TIME_ENTRY_ID=$(curl -H "content-type: application/json" -H "X-Api-Key: X8FmNmqxrwljBr2X" -d '{"start": "'"$NOW"'", "description": "Grading", "projectId": "5f6f98eeedd8bb741e5f4b7a"}' -X POST https://api.clockify.me/api/v1/workspaces/5f6f97b0edd8bb741e5f4973/time-entries | jq --raw-output '.id')
+}
+
+gradingend() {
+  NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  echo "ending grading at $(date +"%F %r")"
+  curl -H "content-type: application/json" -H "X-Api-Key: X8FmNmqxrwljBr2X" -d '{"end": "'"$NOW"'"}' -X PATCH https://api.clockify.me/api/v1/workspaces/5f6f97b0edd8bb741e5f4973/user/5f6f97b0edd8bb741e5f4971/time-entries
+}
+
+gradingclean() {
+  setopt extendedglob
+  rm -rf -- ^noteful-json-server -type d
+}
+
+timecheck() {
+  NOW=$(date -u +"%Y-%m-%dT%H:%M:%S")
+  START_TIME=$(curl -H "content-type: application/json" -H "X-Api-Key: X8FmNmqxrwljBr2X" -X GET https://api.clockify.me/api/v1/workspaces/5f6f97b0edd8bb741e5f4973/time-entries/$CURRENT_TIME_ENTRY_ID | jq --raw-output '.timeInterval.start')
+  datediff ${START_TIME%Z} $NOW -f '%H hours %M minutes %S seconds'
+}
+
+reload() {
+  source ~/.zshrc
+}
+
 export APP_ENV="development"
 export APP_ID="rmilstead"
 export PATH="/usr/local/bin:$PATH"
@@ -252,3 +330,19 @@ export PATH="/usr/local/sbin:$PATH"
 
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+[[ -s "$HOME/.profile" ]] && source "$HOME/.profile" # Load the default .profile
+
+# Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
+
+autoload -U promptinit && promptinit
+prompt pure
+export PATH="/Applications/Sublime Text.app/Contents/SharedSupport/bin:$PATH"
+
+# Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
+
+# Add RVM to PATH for scripting. Make sure this is the last PATH variable change.
+export PATH="$PATH:$HOME/.rvm/bin"

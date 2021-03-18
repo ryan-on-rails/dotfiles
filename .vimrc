@@ -3,36 +3,34 @@
 """""""""""""""""""""""""""
 call plug#begin('~/.vim/plugged')
 
-Plug 'tyrannicaltoucan/vim-quantum'
 Plug 'tpope/vim-fugitive'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
-Plug 'jiangmiao/auto-pairs'
-Plug 'Townk/vim-autoclose'
 Plug 'tpope/vim-commentary'
+Plug 'preservim/nerdtree'
 Plug 'tpope/vim-surround'
-Plug 'itchyny/lightline.vim'
 Plug 'Yggdroot/indentLine'
 Plug 'vim-ruby/vim-ruby'
 Plug 'ervandew/supertab'
-Plug 'posva/vim-vue'
-Plug 'severin-lemaignan/vim-minimap'
-Plug 'djoshea/vim-autoread'
-Plug 'slim-template/vim-slim'
 Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
 Plug 'junegunn/fzf.vim'
-Plug 'Chiel92/vim-autoformat'
-Plug '907th/vim-auto-save'
 Plug 'machakann/vim-highlightedyank'
 Plug 'ntpeters/vim-better-whitespace'
-Plug 'vim-syntastic/syntastic'
 Plug 'danilo-augusto/vim-afterglow'
+Plug 'tpope/vim-rails'
+Plug 'mattn/emmet-vim'
+Plug 'dense-analysis/ale'
+Plug 'easymotion/vim-easymotion'
+Plug '907th/vim-auto-save'
 
 call plug#end()
 """""""""""""""""""""""""""
 
 colorscheme afterglow
 let g:afterglow_inherit_background=1
+let g:vim_json_syntax_conceal = 0
+
+let g:deoplete#enable_at_startup = 1
 
 " No annoying sound on errors
 set noerrorbells
@@ -40,10 +38,12 @@ set novisualbell
 set t_vb=
 set tm=500
 
-" Properly disable sound on errors on MacVim
-if has("gui_macvim")
-    autocmd GUIEnter * set vb t_vb=
-endif
+" Set folding style
+set foldmethod=syntax
+au BufRead * normal zR
+
+" Set vim to directory of current file
+set autochdir
 
 " Do not make vim compatible with vi.
 set nocompatible
@@ -100,35 +100,28 @@ let g:airline_theme='afterglow'
 let g:airline_powerline_fonts=1
 let g:airline#extensions#branch#enabled=1
 let g:airline#extensions#tabline#enabled=1
+let g:airline#extensions#ale#enabled=1
 
 " Indent Guides
 let g:indentLine_enabled=1
 let g:indentLine_color_term=235
 let g:indentLine_char='┆'
 
-" Syntastic
-if exists('SyntasticStatuslineFlag')
-  set statusline+=%#warningmsg#
-  set statusline+=%{SyntasticStatuslineFlag()}
-  set statusline+=%*
-endif
-
-let g:syntastic_always_populate_loc_list = 1
-let g:syntastic_auto_loc_list = 1
-let g:syntastic_check_on_open = 1
-let g:syntastic_check_on_wq = 0
-let g:syntastic_ruby_checkers = ['rubocop', 'mri']
-let g:syntastic_ruby_rubocop_exec = system("asdf which rubocop")
-let g:syntastic_sql_checkers = ['sqlint']
-let g:syntastic_sql_sqlint_exec = system("asdf which sqlint")
-let g:auto_save = 1
-
 let g:better_whitespace_enabled=1
 let g:strip_whitespace_on_save=1
 
-" Autoformatter python location
-let g:python3_host_prog='/usr/local/bin/python3'
+let g:ale_linters = {
+      \   'ruby': ['rubocop'],
+      \   'python': ['flake8', 'pylint'],
+      \   'javascript': ['eslint'],
+      \}
+let g:ale_linters_explicit=1
+let g:ale_sign_column_always=1
+let g:ale_set_highlights=0
 
+" vim-autosave
+let g:auto_save=1
+let g:auto_save_silent=1
 
 """"""""""""""""""""""""""
 " Custom bindings
@@ -161,8 +154,15 @@ noremap <silent> <C-q> :Bclose!<CR>
 " Select all
 map <C-a> <esc>ggVG<CR>
 
+function! s:find_git_root()
+  return system('git rev-parse --show-toplevel 2> /dev/null')[:-2]
+endfunction
+
+command! ProjectFiles execute 'Files' s:find_git_root()
+
 " Find files with fzf
-nmap <leader>p :Files!<CR>
+nmap <leader>p :ProjectFiles<CR>
+
 
 " Unmap arrow keys
 noremap <Up> <Nop>
@@ -184,3 +184,32 @@ tnoremap <Esc> <C-\><C-n>
 vnoremap <silent> * :<C-u>call VisualSelection('', '')<CR>/<C-R>=@/<CR><CR>
 vnoremap <silent> # :<C-u>call VisualSelection('', '')<CR>?<C-R>=@/<CR><CR>
 
+" Map moving between splits to normal vim movement
+nnoremap <C-J> <C-W><C-J>
+nnoremap <C-K> <C-W><C-K>
+nnoremap <C-L> <C-W><C-L>
+nnoremap <C-H> <C-W><C-H>
+
+" Nerdtree
+map <C-n> :NERDTreeToggle<CR>
+
+" close vim if the only window left open is a NERDTree
+autocmd bufenter * if (winnr("$") == 1 && exists("b:NERDTree") && b:NERDTree.isTabTree()) | q | endif
+
+" Set fold toggle to space in normal mode
+nnoremap <space> za
+
+" <Leader>f{char} to move to {char}
+map  <Leader>f <Plug>(easymotion-bd-f)
+nmap <Leader>f <Plug>(easymotion-overwin-f)
+
+" s{char}{char} to move to {char}{char}
+nmap <Leader>s <Plug>(easymotion-overwin-f2)
+
+" Move to line
+map <Leader>l <Plug>(easymotion-bd-jk)
+nmap <Leader>l <Plug>(easymotion-overwin-line)
+
+" Move to word
+map  <Leader>w <Plug>(easymotion-bd-w)
+nmap <Leader>w <Plug>(easymotion-overwin-w)
